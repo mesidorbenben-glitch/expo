@@ -1,4 +1,44 @@
-// moncashClient.js
+// server.js (snippet)
+const express = require('express');
+const bodyParser = require('body-parser');
+const { getAccessToken, createPayment, getPaymentStatus, requestBankDeposit } = require('./moncashClient');
+const app = express();
+app.use(bodyParser.json());
+
+// example: create payment endpoint used by mobile app
+app.post('/api/create-moncash-payment', async (req, res) => {
+  try {
+    const { amount, orderId, successUrl, errorUrl, description } = req.body;
+    const tokenResp = await getAccessToken(process.env.MONCASH_CLIENT_ID, process.env.MONCASH_CLIENT_SECRET);
+    const accessToken = tokenResp.access_token;
+    // MonCash expects amount in HTG (gdes) - check currency & field names in doc
+    const payload = {
+      orderId,
+      amount,
+      description,
+      successUrl,
+      errorUrl,
+      // add other required fields from doc (customer info, metadata)
+    };
+    const created = await createPayment(accessToken, payload);
+    // return redirect url / token / transaction id to mobile app
+    res.json(created);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// webhook (MonCash will call this when transaction status changes)
+app.post('/webhook/moncash', async (req, res) => {
+  // validate signature if provided by MonCash; update DB transaction
+  const event = req.body;
+  console.log('moncash webhook', event);
+  // if payment captured -> initiate bank deposit
+  res.status(200).send('ok');
+});
+
+app.listen(3000, () => console.log('listening'));// moncashClient.js
 // Minimal MonCash client: get OAuth token, create payment, check status, request deposit to bank (merchant)
 const fetch = require('node-fetch');
 const qs = require('querystring');
