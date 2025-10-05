@@ -1,4 +1,8 @@
-// server.js
+PORT=4000
+FRONTEND_BASE=http://localhost:3000
+MONCASH_CLIENT_ID=ton_client_id_sandbox
+MONCASH_CLIENT_SECRET=ton_client_secret_sandbox
+MOCK_TOKEN=false// server.js
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
