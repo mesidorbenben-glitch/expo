@@ -1,4 +1,53 @@
-// server.js (snippet)
+// TransferScreen.js (Expo)
+import React, { useState } from 'react';
+import { View, Text, TextInput, Button, Alert, ActivityIndicator } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
+
+export default function TransferMoneyScreen() {
+  const [amount, setAmount] = useState('');
+  const [recipientBank, setRecipientBank] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit() {
+    if (!amount || !recipientBank) return Alert.alert('Erreur', 'Remplissez tous les champs');
+    setLoading(true);
+    try {
+      // call your backend to create MonCash payment
+      const res = await fetch('https://ton-backend.example.com/api/create-moncash-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: Number(amount),
+          orderId: `order_${Date.now()}`,
+          successUrl: 'myapp://transfer/success',
+          errorUrl: 'myapp://transfer/error',
+          description: `Transfert vers banque: ${recipientBank}`
+        })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Erreur création paiement');
+
+      // json may contain a redirectUrl or paymentToken
+      // strategy: open webview / in-app browser to let user confirm MonCash payment or use deep link.
+      Alert.alert('Étape suivante', 'Ouvre l’interface MonCash pour compléter le paiement.');
+      // TODO: ouvrir WebView / Linking.openURL(json.paymentUrl)
+    } catch (err) {
+      Alert.alert('Erreur', err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <View style={{ padding: 16 }}>
+      <Text>Montant (HTG)</Text>
+      <TextInput keyboardType="numeric" value={amount} onChangeText={setAmount} style={{ borderWidth:1, padding:8, marginBottom:12 }}/>
+      <Text>Banque destinataire (IBAN / compte)</Text>
+      <TextInput value={recipientBank} onChangeText={setRecipientBank} style={{ borderWidth:1, padding:8, marginBottom:12 }}/>
+      {loading ? <ActivityIndicator/> : <Button title="Initier le transfert" onPress={handleSubmit}/>}
+    </View>
+  );
+}// server.js (snippet)
 const express = require('express');
 const bodyParser = require('body-parser');
 const { getAccessToken, createPayment, getPaymentStatus, requestBankDeposit } = require('./moncashClient');
