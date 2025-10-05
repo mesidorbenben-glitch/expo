@@ -1,0 +1,3 @@
+# si tu n'as pas créé l'app (ou si tu veux un nouveau projet)
+npx create-expo-app moncash-demo
+cd moncash-demo
