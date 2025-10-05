@@ -1,4 +1,64 @@
-<!-- Banner Image -->
+// moncashClient.js
+// Minimal MonCash client: get OAuth token, create payment, check status, request deposit to bank (merchant)
+const fetch = require('node-fetch');
+const qs = require('querystring');
+
+const MONCASH_REST_HOST = process.env.MONCASH_REST_HOST || 'https://sandbox.moncashbutton.digicelgroup.com/Api';
+const MONCASH_GATEWAY = process.env.MONCASH_GATEWAY || 'https://sandbox.moncashbutton.digicelgroup.com/Moncash-middleware';
+
+// 1) Get access token (client credentials)
+async function getAccessToken(clientId, clientSecret) {
+  const tokenUrl = `${MONCASH_REST_HOST}/oauth2/token`;
+  const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+  const res = await fetch(tokenUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${auth}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: qs.stringify({ grant_type: 'client_credentials' })
+  });
+  if (!res.ok) throw new Error(`Token error ${res.status}`);
+  return res.json(); // contains access_token, expires_in
+}
+
+// 2) Create payment (merchant creates a payment / orderId)
+async function createPayment(accessToken, payload) {
+  // payload: { orderId, amount, currency, description, successUrl, errorUrl }
+  const url = `${MONCASH_REST_HOST}/payments`; // check exact path in your doc; adjust if needed
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || 'MonCash createPayment error');
+  return json;
+}
+
+// 3) Check payment status
+async function getPaymentStatus(accessToken, transactionId) {
+  const url = `${MONCASH_REST_HOST}/payments/${transactionId}`; // adjust path to doc
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }});
+  if (!res.ok) throw new Error('MonCash status error');
+  return res.json();
+}
+
+// 4) Request deposit to bank (merchant withdraw to bank account)
+// Note: path & payload depend on MonCash merchant API for bank deposit — check doc and adjust.
+async function requestBankDeposit(accessToken, depositPayload) {
+  const url = `${MONCASH_GATEWAY}/merchant/deposit`; // pseudo-path — update from doc
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(depositPayload)
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || 'MonCash bank deposit error');
+  return json;
+}
+
+module.exports = { getAccessToken, createPayment, getPaymentStatus, requestBankDeposit };<!-- Banner Image -->
 
 <p align="center">
   <a href="https://expo.dev/">
