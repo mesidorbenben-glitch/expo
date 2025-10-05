@@ -1,4 +1,101 @@
-// TransferScreen.js (Expo)
+// server.js
+require('dotenv').config();
+const express = require('express');
+const axios = require('axios');
+const cors = require('cors');
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const PORT = process.env.PORT || 4000;
+
+// Config MonCash sandbox
+const MONCASH_REST_HOST = 'https://sandbox.moncashbutton.digicelgroup.com/Api';
+const MONCASH_GATEWAY = 'https://sandbox.moncashbutton.digicelgroup.com/Moncash-middleware';
+
+// Helper: get access token (Basic client_id:client_secret -> token)
+// NOTE: depending on MonCash sandbox, you might call a token endpoint or use Basic directly in calls.
+// This example demonstrates requesting a token endpoint then using Bearer.
+async function getAccessToken() {
+  // If you have a token endpoint from Digicel, call it. Otherwise MonCash accepts Basic in some calls.
+  // We'll attempt an auth call to /v1/token (adjust to your portal info).
+  if (process.env.MOCK_TOKEN === 'true') {
+    return { token: 'mock_sandbox_token', expires_in: 3600 };
+  }
+
+  const clientId = process.env.MONCASH_CLIENT_ID;
+  const clientSecret = process.env.MONCASH_CLIENT_SECRET;
+  if (!clientId || !clientSecret) throw new Error('MONCASH_CLIENT_ID/SECRET manquants');
+
+  const basic = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+  try {
+    // Many MonCash docs use a REST Get/POST wrapped; adapt if your sandbox shows a specific token endpoint.
+    const resp = await axios.post(`${MONCASH_REST_HOST}/v1/token`, {}, {
+      headers: { Authorization: `Basic ${basic}`, 'Content-Type': 'application/json' }
+    });
+    return { token: resp.data.access_token || resp.data.token, raw: resp.data };
+  } catch (err) {
+    // fallback: return Basic as token (some endpoints accept Basic directly)
+    return { token: basic, isBasic: true, raw: err.response?.data || err.message };
+  }
+}
+
+// Create payment endpoint
+app.post('/api/moncash/create-payment', async (req, res) => {
+  try {
+    const { amount, orderId, successUrl, errorUrl, description } = req.body;
+    if (!amount || !orderId) return res.status(400).json({ message: 'amount and orderId requis' });
+
+    const auth = await getAccessToken();
+
+    // Build body per MonCash CreatePayment spec
+    const body = {
+      amount: amount,               // ex: 100.00
+      orderId: orderId,             // unique id from your system
+      description: description || 'Paiement test sandbox',
+      successUrl: successUrl || `${process.env.FRONTEND_BASE}/success`,
+      errorUrl: errorUrl || `${process.env.FRONTEND_BASE}/error`
+      // certains docs demandent "merchantAccount", "customerMsisdn", etc. Ajoute selon ta config.
+    };
+
+    // Call CreatePayment (endpoint path may be /v1/CreatePayment or similar; adapter si besoin)
+    const createUrl = `${MONCASH_REST_HOST}/v1/CreatePayment`;
+    const headers = {
+      'Content-Type': 'application/json'
+    };
+    if (auth.isBasic) {
+      headers['Authorization'] = `Basic ${auth.token}`;
+    } else {
+      headers['Authorization'] = `Bearer ${auth.token}`;
+    }
+
+    const resp = await axios.post(createUrl, body, { headers });
+
+    // Resp should include a redirect URL toward MonCash middleware / Gateway
+    // Example: resp.data.redirectUrl or resp.data.data.redirectUrl — log raw to inspect.
+    const result = resp.data;
+    // Try common fields:
+    const redirectUrl = result.redirectUrl || result.data?.redirectUrl || result.paymentUrl || null;
+
+    return res.json({ raw: result, redirectUrl });
+  } catch (err) {
+    console.error('Create payment error:', err.response?.data || err.message);
+    return res.status(500).json({ error: err.response?.data || err.message });
+  }
+});
+
+// Simple token debug endpoint
+app.get('/api/moncash/token', async (req, res) => {
+  try {
+    const token = await getAccessToken();
+    res.json(token);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.listen(PORT, () => console.log(`MonCash backend listening on ${PORT}`));// TransferScreen.js (Expo)
 import React, { useState } from 'react';
 import { View, Text, TextInput, Button, Alert, ActivityIndicator } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
