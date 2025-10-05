@@ -1,4 +1,4 @@
-// src/App.js
+REACT_APP_BACKEND=http://localhost:4000// src/App.js
 import React, { useState } from 'react';
 
 function App() {
