@@ -1,4 +1,67 @@
-PORT=4000
+// src/App.js
+import React, { useState } from 'react';
+
+function App() {
+  const [amount, setAmount] = useState('');
+  const [orderId, setOrderId] = useState('');
+  const [loading, setLoading] = useState(false);
+  const BACKEND = process.env.REACT_APP_BACKEND || 'http://localhost:4000';
+
+  async function handlePay(e) {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const resp = await fetch(`${BACKEND}/api/moncash/create-payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: amount,
+          orderId: orderId || `order-${Date.now()}`,
+          description: 'Transfert test sandbox',
+          successUrl: `${window.location.origin}/success`,
+          errorUrl: `${window.location.origin}/error`
+        })
+      });
+      const data = await resp.json();
+      setLoading(false);
+      if (data.redirectUrl) {
+        // Ouvre la page MonCash Gateway pour payer
+        window.location.href = data.redirectUrl;
+      } else {
+        alert('Aucune URL de paiement renvoyée. Voir la console.');
+        console.log('raw:', data.raw || data);
+      }
+    } catch (err) {
+      setLoading(false);
+      console.error(err);
+      alert('Erreur lors de la création du paiement (voir console).');
+    }
+  }
+
+  return (
+    <div style={{ padding: 20, maxWidth: 600, margin: '0 auto' }}>
+      <h2>MonCash (Sandbox) — Test Create Payment</h2>
+      <form onSubmit={handlePay}>
+        <div>
+          <label>Montant (HTG)</label><br />
+          <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="100.00" />
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <label>Order ID (optionnel)</label><br />
+          <input value={orderId} onChange={e => setOrderId(e.target.value)} placeholder="order-123" />
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <button type="submit" disabled={loading}>{loading ? 'En cours...' : 'Payer (sandbox)'}</button>
+        </div>
+      </form>
+      <p style={{ marginTop: 20, fontSize: 12 }}>
+        Utilise ton compte sandbox MonCash (ou numéro sandbox) pour tester la redirection.
+      </p>
+    </div>
+  );
+}
+
+export default App;PORT=4000
 FRONTEND_BASE=http://localhost:3000
 MONCASH_CLIENT_ID=ton_client_id_sandbox
 MONCASH_CLIENT_SECRET=ton_client_secret_sandbox
